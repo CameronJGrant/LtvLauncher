@@ -1,3 +1,4 @@
+import 'package:flauncher/flauncher_channel.dart';
 import 'package:flauncher/widgets/settings/settings_panel.dart';
 import 'package:flauncher/widgets/settings/inputs_panel.dart';
 import 'package:flauncher/widgets/settings/notifications_panel.dart';
@@ -103,6 +104,13 @@ class FocusAwareAppBarState extends State<FocusAwareAppBar>
                 icon: Icons.settings_outlined,
                 focusNode: _settingsFocusNode,
                 onPressed: () => showDialog(context: context, builder: (_) => const SettingsPanel()),
+              ),
+              // TEMP: open the stock Android TV home to compare while developing; HOME
+              // returns here. Remove together with re-disabling com.google.android.tvlauncher.
+              _FocusableIconButton(
+                icon: Icons.compare_arrows,
+                onPressed: () => context.read<FLauncherChannel>().launchWatchNextProgram(
+                    "intent:#Intent;component=com.google.android.tvlauncher/.MainActivity;end"),
               ),
               Selector<SettingsService, bool>(
                 selector: (_, settings) => settings.showInputsWidgetInStatusBar,
