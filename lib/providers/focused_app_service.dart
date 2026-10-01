@@ -90,11 +90,18 @@ class FocusedAppService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // Don't keep fetching artwork while an app is in front of the launcher.
+  // Don't keep fetching artwork while an app is in front of the launcher. Coming back,
+  // re-read the previews: Plex republishes its rows with new image ids whenever it runs,
+  // so the list loaded before it was opened is likely stale.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _startRotation();
+      _previewsLoadedAt = null;
+      final packageName = _packageName;
+      if (packageName != null) {
+        _packageName = null;
+        setFocused(packageName);
+      }
     } else {
       _rotation?.cancel();
     }

@@ -208,7 +208,6 @@ class _FLauncherState extends State<FLauncher> {
       fit: StackFit.expand,
       children: [
         background,
-        const PreviewBackdrop(),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -222,6 +221,7 @@ class _FLauncherState extends State<FLauncher> {
             ),
           ),
         ),
+        const PreviewBackdrop(),
       ],
     );
   }

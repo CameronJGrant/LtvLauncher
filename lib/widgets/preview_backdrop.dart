@@ -60,8 +60,9 @@ class _PreviewArtView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (art.portrait) ..._portrait() else _landscape(),
-        // Darken the left and bottom so the tile row and section headers stay readable.
+        if (art.portrait) _blurredFill() else Image(image: image, fit: BoxFit.cover),
+        // Scrims keep the tile row, section headers and clock readable over the art.
+        const ColoredBox(color: Color(0x26000000)),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -93,31 +94,30 @@ class _PreviewArtView extends StatelessWidget {
             ),
           ),
         ),
+        // Above the scrims, so the poster itself stays crisp.
+        if (art.portrait) _poster(),
       ],
     );
   }
 
-  Widget _landscape() => Image(image: image, fit: BoxFit.cover);
+  Widget _blurredFill() => ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: Opacity(opacity: 0.6, child: Image(image: image, fit: BoxFit.cover)),
+      );
 
-  // BoxFit.cover would crop a portrait poster to an unrecognisable strip, so show
-  // it intact below the tile row, over a blurred fill of the same art.
-  List<Widget> _portrait() => [
-        ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Opacity(opacity: 0.6, child: Image(image: image, fit: BoxFit.cover)),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 0, 64, 48),
-          child: Align(
-            alignment: Alignment.bottomRight,
-            child: FractionallySizedBox(
-              heightFactor: 0.55,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image(image: image, fit: BoxFit.contain),
-              ),
+  // BoxFit.cover would crop a portrait poster to an unrecognisable strip, so show it
+  // intact below the tile row.
+  Widget _poster() => Padding(
+        padding: const EdgeInsets.fromLTRB(0, 0, 64, 48),
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: FractionallySizedBox(
+            heightFactor: 0.55,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image(image: image, fit: BoxFit.contain),
             ),
           ),
         ),
-      ];
+      );
 }

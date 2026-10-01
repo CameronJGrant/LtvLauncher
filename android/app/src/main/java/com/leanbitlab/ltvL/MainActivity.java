@@ -1447,6 +1447,102 @@ public class MainActivity extends FlutterActivity {
         }
     }
 
+    // Artwork is cached on disk. Besides saving re-downloads on every launcher restart, it
+    // covers apps like Plex whose image provider forgets its ids when its process restarts,
+    // while the preview programs it published still point at them.
+    private static final long POSTER_CACHE_MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000;
+    private static final long POSTER_CACHE_MAX_BYTES = 80L * 1024 * 1024;
+
+    private byte[] getWatchNextPoster(String posterArtUri) {
+        if (posterArtUri == null || posterArtUri.isEmpty()) {
+            return null;
+        }
+        java.io.File cached = posterCacheFile(posterArtUri);
+        if (cached.exists() && System.currentTimeMillis() - cached.lastModified() < POSTER_CACHE_MAX_AGE_MS) {
+            byte[] bytes = readPosterCache(cached);
+            if (bytes != null) {
+                return bytes;
+            }
+        }
+        byte[] bytes = loadPosterUncached(posterArtUri);
+        if (bytes != null && bytes.length > 0) {
+            writePosterCache(cached, bytes);
+            return bytes;
+        }
+        // Source unavailable: a stale copy beats no artwork.
+        return cached.exists() ? readPosterCache(cached) : null;
+    }
+
+    private java.io.File posterCacheFile(String uri) {
+        java.io.File dir = new java.io.File(getCacheDir(), "posters");
+        dir.mkdirs();
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-1")
+                .digest(uri.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder name = new StringBuilder();
+            for (byte b : digest) {
+                name.append(String.format("%02x", b));
+            }
+            return new java.io.File(dir, name.toString());
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return new java.io.File(dir, Integer.toHexString(uri.hashCode()));
+        }
+    }
+
+    private byte[] readPosterCache(java.io.File file) {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+            }
+            return out.size() > 0 ? out.toByteArray() : null;
+        } catch (java.io.IOException e) {
+            return null;
+        }
+    }
+
+    private void writePosterCache(java.io.File file, byte[] bytes) {
+        java.io.File tmp = new java.io.File(file.getPath() + ".tmp");
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+            out.write(bytes);
+        } catch (java.io.IOException e) {
+            tmp.delete();
+            return;
+        }
+        if (!tmp.renameTo(file)) {
+            tmp.delete();
+            return;
+        }
+        trimPosterCache(file.getParentFile());
+    }
+
+    // Evict oldest-written files once over budget, down to three quarters of it.
+    private void trimPosterCache(java.io.File dir) {
+        java.io.File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        long total = 0;
+        for (java.io.File f : files) {
+            total += f.length();
+        }
+        if (total <= POSTER_CACHE_MAX_BYTES) {
+            return;
+        }
+        java.util.Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+        for (java.io.File f : files) {
+            if (total <= POSTER_CACHE_MAX_BYTES * 3 / 4) {
+                break;
+            }
+            long size = f.length();
+            if (f.delete()) {
+                total -= size;
+            }
+        }
+    }
+
     // Streaming apps (Netflix, Prime Video) publish their artwork as https URLs.
     private static final int REMOTE_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 
@@ -1481,7 +1577,7 @@ public class MainActivity extends FlutterActivity {
         }
     }
 
-    private byte[] getWatchNextPoster(String posterArtUri) {
+    private byte[] loadPosterUncached(String posterArtUri) {
         if (posterArtUri == null || posterArtUri.isEmpty()) {
             return null;
         }
