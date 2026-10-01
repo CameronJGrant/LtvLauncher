@@ -454,18 +454,31 @@ class _WatchNextCardState extends State<WatchNextCard> with SingleTickerProvider
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        if (widget.program.posterBytes != null)
+                          Image.memory(
+                            widget.program.posterBytes!,
+                            fit: BoxFit.cover,
+                            cacheWidth: 640,
+                            gaplessPlayback: true,
+                          ),
                         // Card surface with subtle dark gradient and border
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: borderRadius,
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF141517),
-                                Color(0xFF090A0B),
-                              ],
-                            ),
+                            gradient: widget.program.posterBytes != null
+                                ? const LinearGradient(
+                                    begin: Alignment.bottomLeft,
+                                    end: Alignment.topRight,
+                                    colors: [Color(0xE6000000), Color(0x40000000)],
+                                  )
+                                : const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFF141517),
+                                      Color(0xFF090A0B),
+                                    ],
+                                  ),
                             border: Border.all(
                               color: _focused ? Colors.transparent : Colors.white.withOpacity(0.06),
                               width: 1,

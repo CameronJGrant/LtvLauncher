@@ -119,12 +119,9 @@ class WatchNextService extends ChangeNotifier with WidgetsBindingObserver {
       _programs = newPrograms;
       if (callSnapshot == _callCount) notifyListeners();
 
-      // Phase 2: Fetch local posters if present (content://, android.resource://, file://)
+      // Phase 2: Fetch posters, both local (content://, android.resource://, file://) and remote
       final needsPoster = newPrograms.where(
-        (p) => p.posterArtUri.isNotEmpty &&
-               p.posterBytes == null &&
-               !p.posterArtUri.startsWith('http://') &&
-               !p.posterArtUri.startsWith('https://'),
+        (p) => p.posterArtUri.isNotEmpty && p.posterBytes == null,
       ).toList();
       if (needsPoster.isNotEmpty) {
         await Future.wait(
@@ -133,13 +130,15 @@ class WatchNextService extends ChangeNotifier with WidgetsBindingObserver {
               final bytes = await _channel.getWatchNextPoster(p.posterArtUri);
               if (bytes != null && bytes.isNotEmpty) {
                 p.posterBytes = bytes;
+                // Remote artwork can be slow, so show each card's art as it arrives.
+                if (callSnapshot == _callCount) notifyListeners();
               }
             } catch (e) {
               log('Failed to fetch poster for ${p.title}', name: 'WatchNextService', error: e);
             }
           }),
         ).timeout(
-          const Duration(seconds: 2),
+          const Duration(seconds: 15),
           onTimeout: () => [],
         );
         if (callSnapshot == _callCount) notifyListeners();
