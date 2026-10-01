@@ -1296,7 +1296,18 @@ public class MainActivity extends FlutterActivity {
             TvContract.PreviewPrograms.COLUMN_THUMBNAIL_ASPECT_RATIO,
             TvContract.PreviewPrograms.COLUMN_BROWSABLE,
             TvContract.PreviewPrograms.COLUMN_INTENT_URI,
+            TvContract.PreviewPrograms.COLUMN_CHANNEL_ID,
         };
+        // Channel names label each program's source, e.g. the PC a Moonlight app runs on.
+        Map<Long, String> channelNames = new HashMap<>();
+        try (android.database.Cursor channels = getContentResolver().query(TvContract.Channels.CONTENT_URI,
+                new String[]{TvContract.Channels._ID, TvContract.Channels.COLUMN_DISPLAY_NAME}, null, null, null)) {
+            while (channels != null && channels.moveToNext()) {
+                channelNames.put(channels.getLong(0), channels.getString(1));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         try (android.database.Cursor cursor = getContentResolver().query(
                 TvContract.PreviewPrograms.CONTENT_URI, projection, null, null, null)) {
             if (cursor == null) {
@@ -1317,6 +1328,8 @@ public class MainActivity extends FlutterActivity {
                 program.put("posterArtAspectRatio", cursor.getInt(3));
                 program.put("thumbnailUri", cursor.getString(4));
                 program.put("thumbnailAspectRatio", cursor.getInt(5));
+                program.put("intentUri", cursor.getString(7));
+                program.put("channelName", channelNames.get(cursor.getLong(8)));
                 String plexArt = plexArtUrl(cursor.getString(0), cursor.getString(7), 1920, 1080);
                 if (plexArt != null) {
                     program.put("posterArtUri", plexArt);

@@ -22,6 +22,7 @@ import 'package:flauncher/database.dart';
 import 'package:flauncher/flauncher_channel.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/focused_app_service.dart';
+import 'package:flauncher/providers/games_service.dart';
 import 'package:flauncher/providers/launcher_state.dart';
 import 'package:flauncher/providers/network_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
@@ -113,6 +114,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => WatchNextService(fLauncherChannel)),
         ChangeNotifierProvider(create: (_) => WeatherService(fLauncherChannel)),
         ChangeNotifierProvider(create: (_) => FocusedAppService(fLauncherChannel)),
+        ChangeNotifierProvider(create: (_) => GamesService(fLauncherChannel)),
       ],
       child: FLauncherApp()
     )

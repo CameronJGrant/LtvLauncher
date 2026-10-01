@@ -86,6 +86,7 @@
     "plexServer": "Plex server",
     "plexServerHint": "Address, for example 192.168.1.10:32400",
     "notSet": "Not set",
+    "games": "Games",
     "themes": "Themes",
     "hideHighlightOutlineOnHomescreen": "Hide highlight outline on homescreen",
     "appSelectorTransitionAnimation": "App selector transition animation",

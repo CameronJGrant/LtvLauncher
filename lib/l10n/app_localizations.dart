@@ -473,6 +473,12 @@ abstract class AppLocalizations {
   /// **'Not set'**
   String get notSet;
 
+  /// No description provided for @games.
+  ///
+  /// In en, this message translates to:
+  /// **'Games'**
+  String get games;
+
   /// No description provided for @themes.
   ///
   /// In en, this message translates to:

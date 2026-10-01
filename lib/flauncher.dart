@@ -20,6 +20,8 @@
 import 'package:flauncher/actions.dart';
 import 'package:flauncher/custom_traversal_policy.dart';
 import 'package:flauncher/providers/apps_service.dart';
+import 'package:flauncher/providers/games_service.dart';
+import 'package:flauncher/widgets/games_row.dart';
 import 'package:flauncher/widgets/preview_backdrop.dart';
 import 'package:flauncher/providers/launcher_state.dart';
 import 'package:flauncher/providers/wallpaper_service.dart';
@@ -99,7 +101,9 @@ class _FLauncherState extends State<FLauncher> {
                                                 cwSettings.show &&
                                                 hasContinuingPrograms,
                                             continueWatchingOrder:
-                                                cwSettings.order),
+                                                cwSettings.order,
+                                            gamesActive: context.select<GamesService, bool>(
+                                                (games) => games.games.isNotEmpty)),
                                       ],
                                     ),
                                   ),
@@ -123,6 +127,7 @@ class _FLauncherState extends State<FLauncher> {
     List<LauncherSection> sections, {
     bool continueWatchingActive = false,
     int continueWatchingOrder = 0,
+    bool gamesActive = false,
   }) {
     List<Widget> children = [];
     bool firstCategoryFound = false;
@@ -130,9 +135,8 @@ class _FLauncherState extends State<FLauncher> {
 
     int sectionIdx = 0;
     for (var section in sections) {
-      if (continueWatchingActive && !cwInserted && sectionIdx == continueWatchingOrder) {
-        final bool isFirstSection = !firstCategoryFound;
-        children.add(ContinueWatchingRow(isFirstSection: isFirstSection));
+      if ((continueWatchingActive || gamesActive) && !cwInserted && sectionIdx == continueWatchingOrder) {
+        _addWatchingAndGames(children, continueWatchingActive, gamesActive, isFirstSection: !firstCategoryFound);
         cwInserted = true;
         firstCategoryFound = true;
       }
@@ -178,14 +182,24 @@ class _FLauncherState extends State<FLauncher> {
       sectionIdx++;
     }
 
-    if (continueWatchingActive && !cwInserted) {
-      final bool isFirstSection = !firstCategoryFound;
-      children.add(ContinueWatchingRow(isFirstSection: isFirstSection));
+    if ((continueWatchingActive || gamesActive) && !cwInserted) {
+      _addWatchingAndGames(children, continueWatchingActive, gamesActive, isFirstSection: !firstCategoryFound);
       cwInserted = true;
       firstCategoryFound = true;
     }
 
     return Column(children: children);
+  }
+
+  // Continue Watching, with the games row directly under it. Only the topmost of the two
+  // hands UP to the settings bar.
+  void _addWatchingAndGames(List<Widget> children, bool continueWatching, bool games, {required bool isFirstSection}) {
+    if (continueWatching) {
+      children.add(ContinueWatchingRow(isFirstSection: isFirstSection));
+    }
+    if (games) {
+      children.add(GamesRow(isFirstSection: isFirstSection && !continueWatching));
+    }
   }
 
   Widget _wallpaper(BuildContext context, WallpaperService wallpaperService) {

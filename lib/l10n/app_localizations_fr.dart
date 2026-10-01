@@ -192,6 +192,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get notSet => 'Not set';
 
   @override
+  String get games => 'Games';
+
+  @override
   String get themes => 'Thèmes';
 
   @override
