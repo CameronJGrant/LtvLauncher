@@ -183,6 +183,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get showCategoryTitles => '显示类别标题';
 
   @override
+  String get plexServer => 'Plex server';
+
+  @override
+  String get plexServerHint => 'Address, for example 192.168.1.10:32400';
+
+  @override
+  String get notSet => 'Not set';
+
+  @override
   String get themes => '主题';
 
   @override

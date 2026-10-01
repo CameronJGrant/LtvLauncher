@@ -1291,6 +1291,7 @@ public class MainActivity extends FlutterActivity {
             TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI,
             TvContract.PreviewPrograms.COLUMN_THUMBNAIL_ASPECT_RATIO,
             TvContract.PreviewPrograms.COLUMN_BROWSABLE,
+            TvContract.PreviewPrograms.COLUMN_INTENT_URI,
         };
         try (android.database.Cursor cursor = getContentResolver().query(
                 TvContract.PreviewPrograms.CONTENT_URI, projection, null, null, null)) {
@@ -1308,6 +1309,11 @@ public class MainActivity extends FlutterActivity {
                 program.put("posterArtAspectRatio", cursor.getInt(3));
                 program.put("thumbnailUri", cursor.getString(4));
                 program.put("thumbnailAspectRatio", cursor.getInt(5));
+                String plexArt = plexArtUrl(cursor.getString(0), cursor.getString(7), 1920, 1080);
+                if (plexArt != null) {
+                    program.put("posterArtUri", plexArt);
+                    program.put("posterArtAspectRatio", TvContract.PreviewPrograms.ASPECT_RATIO_16_9);
+                }
                 list.add(program);
             }
         } catch (Exception e) {
@@ -1401,7 +1407,10 @@ public class MainActivity extends FlutterActivity {
                 map.put("playbackPosition", cursor.getLong(cursor.getColumnIndexOrThrow(TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS)));
                 map.put("duration", cursor.getLong(cursor.getColumnIndexOrThrow(TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS)));
                 map.put("intentUri", cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_INTENT_URI));
-                map.put("posterArtUri", poster);
+                String plexArt = plexArtUrl(
+                    cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME),
+                    cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_INTENT_URI), 960, 540);
+                map.put("posterArtUri", plexArt != null ? plexArt : poster);
                 list.add(map);
             }
 
@@ -1543,10 +1552,37 @@ public class MainActivity extends FlutterActivity {
         }
     }
 
+    // Plex serves its Android TV artwork through its own content provider, which only
+    // works while the app holds a live server connection. Its launch links carry the
+    // library item id, so when a server is configured the art is requested from it.
+    private static final java.util.regex.Pattern PLEX_METADATA_KEY =
+        java.util.regex.Pattern.compile("^plex://server://[^/]+/.*?/library/metadata/([0-9]+)");
+
+    private String plexArtUrl(String packageName, String intentUri, int width, int height) {
+        if (!"com.plexapp.android".equals(packageName) || intentUri == null) {
+            return null;
+        }
+        String server = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+            .getString("flutter.plex_server_url", "");
+        java.util.regex.Matcher matcher = PLEX_METADATA_KEY.matcher(intentUri);
+        if (server.isEmpty() || !matcher.find()) {
+            return null;
+        }
+        String art = "/library/metadata/" + matcher.group(1) + "/art";
+        return server + "/photo/:/transcode?width=" + width + "&height=" + height
+            + "&minSize=1&upscale=1&url=" + Uri.encode(art);
+    }
+
+    // Amazon composites "NEW SERIES" / "TOP 10" style badges onto Prime Video artwork via
+    // directives in the image URL. Requesting the bare image with only a resize drops them.
+    private static final java.util.regex.Pattern AMAZON_IMAGE_DIRECTIVES =
+        java.util.regex.Pattern.compile("^(https://[^/]*amazon[.]com/images/[^ ]+/[^/.]+)[.]_[^ ]*[.](jpg|png)$");
+
     // Streaming apps (Netflix, Prime Video) publish their artwork as https URLs.
     private static final int REMOTE_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 
     private byte[] fetchRemoteImage(String url) {
+        url = AMAZON_IMAGE_DIRECTIVES.matcher(url).replaceFirst("$1._UR1920,1080_.$2");
         java.net.HttpURLConnection connection = null;
         try {
             connection = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
@@ -1554,6 +1590,7 @@ public class MainActivity extends FlutterActivity {
             connection.setReadTimeout(10000);
             connection.setInstanceFollowRedirects(true);
             if (connection.getResponseCode() != java.net.HttpURLConnection.HTTP_OK) {
+                android.util.Log.w("LTvLauncher", "Image fetch got HTTP " + connection.getResponseCode() + " for " + url);
                 return null;
             }
             try (java.io.InputStream inputStream = connection.getInputStream()) {
@@ -1569,6 +1606,7 @@ public class MainActivity extends FlutterActivity {
                 return outputStream.toByteArray();
             }
         } catch (Exception e) {
+            android.util.Log.w("LTvLauncher", "Image fetch failed for " + url + ": " + e);
             return null;
         } finally {
             if (connection != null) {
@@ -1583,7 +1621,12 @@ public class MainActivity extends FlutterActivity {
         }
         try {
             if (posterArtUri.startsWith("http://") || posterArtUri.startsWith("https://")) {
-                return fetchRemoteImage(posterArtUri);
+                byte[] remote = fetchRemoteImage(posterArtUri);
+                // Plex episodes have no background art of their own; their thumb is a 16:9 still.
+                if (remote == null && posterArtUri.endsWith("%2Fart")) {
+                    remote = fetchRemoteImage(posterArtUri.substring(0, posterArtUri.length() - 3) + "thumb");
+                }
+                return remote;
             } else if (posterArtUri.startsWith("file://")) {
                 Uri fileUri = Uri.parse(posterArtUri);
                 java.io.File file = new java.io.File(fileUri.getPath());

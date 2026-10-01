@@ -183,6 +183,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get showCategoryTitles => '카테고리 제목 표시';
 
   @override
+  String get plexServer => 'Plex server';
+
+  @override
+  String get plexServerHint => 'Address, for example 192.168.1.10:32400';
+
+  @override
+  String get notSet => 'Not set';
+
+  @override
   String get themes => '테마';
 
   @override

@@ -18,6 +18,8 @@
 
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/rounded_switch_list_tile.dart';
+import 'package:flauncher/widgets/settings/focusable_settings_tile.dart';
+import 'package:flauncher/widgets/settings/plex_server_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flauncher/l10n/app_localizations.dart';
@@ -76,6 +78,29 @@ class MiscPanelPage extends StatelessWidget {
                 onChanged: (value) => settingsService.setAppSelectorTransitionAnimationEnabled(value),
                 title: Text(localizations.appSelectorTransitionAnimation, style: Theme.of(context).textTheme.bodyMedium),
                 secondary: const Icon(Icons.animation),
+              ),
+              FocusableSettingsTile(
+                leading: const Icon(Icons.dns_outlined),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(localizations.plexServer, style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                      settingsService.plexServerUrl.isEmpty ? localizations.notSet : settingsService.plexServerUrl,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+                onPressed: () async {
+                  final url = await showDialog<String>(
+                    context: context,
+                    builder: (_) => PlexServerDialog(initialValue: settingsService.plexServerUrl),
+                  );
+                  if (url != null) {
+                    await settingsService.setPlexServerUrl(url);
+                  }
+                },
               ),
             ],
           ),

@@ -51,6 +51,7 @@ const String _continueWatchingShowProgressKey = "continue_watching_show_progress
 const String _continueWatchingShowPercentageKey = "continue_watching_show_percentage";
 const String _continueWatchingShowDescriptionKey = "continue_watching_show_description";
 const String _continueWatchingOrderKey = "continue_watching_order";
+const String _plexServerUrlKey = "plex_server_url";
 const String _hiddenWatchNextProgramIdsKey = "hidden_watch_next_program_ids";
 const String _hiddenWatchNextPackagesKey = "hidden_watch_next_packages";
 const String _startOnBootKey = "start_on_boot";
@@ -113,6 +114,7 @@ class SettingsService extends ChangeNotifier {
   late bool _timeBasedWallpaperEnabled;
   late bool _showInputsWidgetInStatusBar;
   late bool _showContinueWatching;
+  late String _plexServerUrl;
   late String _continueWatchingCardSize;
   late int _continueWatchingMaxItems;
   late bool _continueWatchingShowProgress;
@@ -140,6 +142,7 @@ class SettingsService extends ChangeNotifier {
   bool get showAppNamesBelowIcons => _showAppNamesBelowIcons;
 
   String get themes => _themes;
+  String get plexServerUrl => _plexServerUrl;
 
   bool get hideHighlightOutlineOnHomescreen => _hideHighlightOutlineOnHomescreen;
 
@@ -210,6 +213,7 @@ class SettingsService extends ChangeNotifier {
     _showCategoryTitles = _sharedPreferences.getBool(_showCategoryTitlesKey) ?? true;
     _showAppNamesBelowIcons = _sharedPreferences.getBool(_showAppNamesBelowIconsKey) ?? false;
     _themes = _sharedPreferences.getString(_themesKey) ?? "modern";
+    _plexServerUrl = _sharedPreferences.getString(_plexServerUrlKey) ?? "";
     _hideHighlightOutlineOnHomescreen = _sharedPreferences.getBool(_hideHighlightOutlineOnHomescreenKey) ?? false;
     _appSelectorTransitionAnimationEnabled = _sharedPreferences.getBool(_appSelectorTransitionAnimationEnabledKey) ?? true;
     _showDateInStatusBar = _sharedPreferences.getBool(_showDateInStatusBarKey) ?? true;
@@ -252,6 +256,7 @@ class SettingsService extends ChangeNotifier {
       _showCategoryTitlesKey: _showCategoryTitles,
       _showAppNamesBelowIconsKey: _showAppNamesBelowIcons,
       _themesKey: _themes,
+      _plexServerUrlKey: _plexServerUrl,
       _hideHighlightOutlineOnHomescreenKey: _hideHighlightOutlineOnHomescreen,
       _appSelectorTransitionAnimationEnabledKey: _appSelectorTransitionAnimationEnabled,
       _showDateInStatusBarKey: _showDateInStatusBar,
@@ -354,6 +359,27 @@ class SettingsService extends ChangeNotifier {
   Future<void> setShowCategoryTitles(bool show) async {
     await _sharedPreferences.setBool(_showCategoryTitlesKey, show);
     _showCategoryTitles = show;
+    notifyListeners();
+  }
+
+  // Read natively by MainActivity, which requests Plex artwork from this server instead of
+  // through the Plex app's own provider.
+  Future<void> setPlexServerUrl(String url) async {
+    var value = url.trim();
+    while (value.endsWith("/")) {
+      value = value.substring(0, value.length - 1);
+    }
+    if (value.isNotEmpty) {
+      if (!value.contains("://")) {
+        value = "http://$value";
+      }
+      final uri = Uri.tryParse(value);
+      if (uri != null && !uri.hasPort) {
+        value = uri.replace(port: 32400).toString();
+      }
+    }
+    await _sharedPreferences.setString(_plexServerUrlKey, value);
+    _plexServerUrl = value;
     notifyListeners();
   }
 

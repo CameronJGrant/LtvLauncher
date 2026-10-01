@@ -178,14 +178,6 @@ class FocusedAppService extends ChangeNotifier with WidgetsBindingObserver {
   // 4 = 2:3, 5 = movie poster (1:1.441).
   static bool _isPortrait(int aspectRatio) => aspectRatio == 4 || aspectRatio == 5;
 
-  // Prime Video's artwork has "NEW SERIES" / "NEW MOVIE" badges composited on by Amazon's
-  // image server, via directives in the URL. Requesting the image with only a resize
-  // directive returns the same art without them.
-  static final _amazonImageDirectives = RegExp(r'^(https://[^/]*amazon\.com/images/\S+/[^/.]+)\._\S*\.(jpg|png)$');
-
-  static String _withoutBakedBadges(String uri) =>
-      uri.replaceFirstMapped(_amazonImageDirectives, (m) => '${m[1]}._UR1920,1080_.${m[2]}');
-
   static PreviewArt? _artFrom(Map<dynamic, dynamic> row) {
     final poster = row["posterArtUri"] as String?;
     final posterAspect = (row["posterArtAspectRatio"] as int?) ?? 0;
@@ -194,13 +186,13 @@ class FocusedAppService extends ChangeNotifier with WidgetsBindingObserver {
 
     // Prefer landscape art: it fills a TV screen without cropping.
     if (poster != null && poster.isNotEmpty && !_isPortrait(posterAspect)) {
-      return PreviewArt(_withoutBakedBadges(poster), false);
+      return PreviewArt(poster, false);
     }
     if (thumbnail != null && thumbnail.isNotEmpty && !_isPortrait(thumbnailAspect)) {
-      return PreviewArt(_withoutBakedBadges(thumbnail), false);
+      return PreviewArt(thumbnail, false);
     }
     if (poster != null && poster.isNotEmpty) {
-      return PreviewArt(_withoutBakedBadges(poster), true);
+      return PreviewArt(poster, true);
     }
     return null;
   }

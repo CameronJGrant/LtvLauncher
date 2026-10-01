@@ -455,6 +455,24 @@ abstract class AppLocalizations {
   /// **'Show category titles'**
   String get showCategoryTitles;
 
+  /// No description provided for @plexServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Plex server'**
+  String get plexServer;
+
+  /// No description provided for @plexServerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Address, for example 192.168.1.10:32400'**
+  String get plexServerHint;
+
+  /// No description provided for @notSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get notSet;
+
   /// No description provided for @themes.
   ///
   /// In en, this message translates to:

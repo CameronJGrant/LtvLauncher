@@ -183,6 +183,15 @@ class AppLocalizationsIt extends AppLocalizations {
   String get showCategoryTitles => 'Mostra titoli delle categorie';
 
   @override
+  String get plexServer => 'Plex server';
+
+  @override
+  String get plexServerHint => 'Address, for example 192.168.1.10:32400';
+
+  @override
+  String get notSet => 'Not set';
+
+  @override
   String get themes => 'Temi';
 
   @override
