@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter, TileMode;
+
 import 'package:flauncher/models/watch_next_program.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
@@ -455,11 +457,15 @@ class _WatchNextCardState extends State<WatchNextCard> with SingleTickerProvider
                       fit: StackFit.expand,
                       children: [
                         if (widget.program.posterBytes != null)
-                          Image.memory(
-                            widget.program.posterBytes!,
-                            fit: BoxFit.cover,
-                            cacheWidth: 640,
-                            gaplessPlayback: true,
+                          ImageFiltered(
+                            enabled: widget.program.restricted,
+                            imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12, tileMode: TileMode.decal),
+                            child: Image.memory(
+                              widget.program.posterBytes!,
+                              fit: BoxFit.cover,
+                              cacheWidth: 640,
+                              gaplessPlayback: true,
+                            ),
                           ),
                         // Card surface with subtle dark gradient and border
                         Container(

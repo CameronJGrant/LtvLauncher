@@ -11,6 +11,8 @@ class WatchNextProgram {
   final int duration;
   final String intentUri;
   final String posterArtUri;
+  // Adult content whose artwork is blurred on the home screen.
+  final bool restricted;
   Uint8List? posterBytes;
 
   WatchNextProgram({
@@ -24,6 +26,7 @@ class WatchNextProgram {
     required this.duration,
     required this.intentUri,
     required this.posterArtUri,
+    this.restricted = false,
     this.posterBytes,
   });
 
@@ -39,6 +42,7 @@ class WatchNextProgram {
       duration: map['duration'] as int? ?? 0,
       intentUri: map['intentUri'] as String? ?? '',
       posterArtUri: map['posterArtUri'] as String? ?? '',
+      restricted: map['restricted'] as bool? ?? false,
     );
   }
 }

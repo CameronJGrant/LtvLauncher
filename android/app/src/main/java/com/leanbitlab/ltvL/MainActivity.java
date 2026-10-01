@@ -176,7 +176,11 @@ public class MainActivity extends FlutterActivity {
                         result.success(true);
                     }
                 }
-                case "getWatchNextPrograms" -> result.success(getWatchNextPrograms());
+                case "getWatchNextPrograms" -> sIoExecutor.execute(() -> {
+                    // Off the main thread: Plex items need a rating lookup over the network.
+                    List<Map<String, Object>> programs = getWatchNextPrograms();
+                    runOnUiThread(() -> result.success(programs));
+                });
                 case "getPreviewPrograms" -> sIoExecutor.execute(() -> {
                     List<Map<String, Object>> programs = getPreviewPrograms();
                     runOnUiThread(() -> result.success(programs));
@@ -1302,6 +1306,10 @@ public class MainActivity extends FlutterActivity {
                 if (cursor.getInt(6) == 0) {
                     continue;
                 }
+                // Adult and unrated Plex titles stay out of the background rotation.
+                if (isPlexAdultOrUnrated(cursor.getString(0), cursor.getString(7))) {
+                    continue;
+                }
                 Map<String, Object> program = new HashMap<>();
                 program.put("packageName", cursor.getString(0));
                 program.put("title", cursor.getString(1));
@@ -1411,6 +1419,9 @@ public class MainActivity extends FlutterActivity {
                     cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME),
                     cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_INTENT_URI), 960, 540);
                 map.put("posterArtUri", plexArt != null ? plexArt : poster);
+                map.put("restricted", isPlexAdult(
+                    cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME),
+                    cursorStringOrEmpty(cursor, TvContract.WatchNextPrograms.COLUMN_INTENT_URI)));
                 list.add(map);
             }
 
@@ -1558,19 +1569,105 @@ public class MainActivity extends FlutterActivity {
     private static final java.util.regex.Pattern PLEX_METADATA_KEY =
         java.util.regex.Pattern.compile("^plex://server://[^/]+/.*?/library/metadata/([0-9]+)");
 
-    private String plexArtUrl(String packageName, String intentUri, int width, int height) {
+    private String plexServer() {
+        return getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+            .getString("flutter.plex_server_url", "");
+    }
+
+    // Library item id from a Plex launch link, or null for other apps and non-library links.
+    private String plexItemKey(String packageName, String intentUri) {
         if (!"com.plexapp.android".equals(packageName) || intentUri == null) {
             return null;
         }
-        String server = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
-            .getString("flutter.plex_server_url", "");
         java.util.regex.Matcher matcher = PLEX_METADATA_KEY.matcher(intentUri);
-        if (server.isEmpty() || !matcher.find()) {
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private String plexArtUrl(String packageName, String intentUri, int width, int height) {
+        String server = plexServer();
+        String key = plexItemKey(packageName, intentUri);
+        if (server.isEmpty() || key == null) {
             return null;
         }
-        String art = "/library/metadata/" + matcher.group(1) + "/art";
+        String art = "/library/metadata/" + key + "/art";
         return server + "/photo/:/transcode?width=" + width + "&height=" + height
             + "&minSize=1&upscale=1&url=" + Uri.encode(art);
+    }
+
+    // Content ratings for the kids: adult titles are blurred in Continue Watching, and the
+    // background rotation also leaves out unrated ones.
+    private static final java.util.Set<String> ADULT_RATINGS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "R", "NC-17", "X", "TV-MA", "18", "18A", "R18"));
+    private static final java.util.Set<String> UNRATED = new java.util.HashSet<>(java.util.Arrays.asList(
+        "", "NR", "NOT RATED", "UNRATED"));
+    private static final String RATING_LOOKUP_FAILED = "?";
+
+    private final java.util.Map<String, String> plexRatings = new java.util.concurrent.ConcurrentHashMap<>();
+
+    // A Plex item's rating, normalized ("R", "TV-MA", "" when unrated). Null for items from
+    // other apps or with no Plex server configured; RATING_LOOKUP_FAILED when the server
+    // couldn't be asked, so a hiccup never lets artwork through.
+    private String plexRating(String packageName, String intentUri) {
+        String server = plexServer();
+        String key = plexItemKey(packageName, intentUri);
+        if (server.isEmpty() || key == null) {
+            return null;
+        }
+        String rating = plexRatings.get(key);
+        if (rating == null) {
+            rating = fetchPlexContentRating(server, key);
+            if (rating == null) {
+                return RATING_LOOKUP_FAILED;
+            }
+            plexRatings.put(key, rating);
+        }
+        String normalized = rating.trim().toUpperCase(java.util.Locale.ROOT);
+        // Regional ratings come through as "gb/18" or "ca/14A".
+        return normalized.substring(normalized.lastIndexOf('/') + 1);
+    }
+
+    private boolean isPlexAdult(String packageName, String intentUri) {
+        String rating = plexRating(packageName, intentUri);
+        return rating != null && (rating.equals(RATING_LOOKUP_FAILED) || ADULT_RATINGS.contains(rating));
+    }
+
+    private boolean isPlexAdultOrUnrated(String packageName, String intentUri) {
+        String rating = plexRating(packageName, intentUri);
+        return rating != null
+            && (rating.equals(RATING_LOOKUP_FAILED) || ADULT_RATINGS.contains(rating) || UNRATED.contains(rating));
+    }
+
+    // The item's content rating ("" when it has none), or null if the lookup failed.
+    private String fetchPlexContentRating(String server, String key) {
+        java.net.HttpURLConnection connection = null;
+        try {
+            connection = (java.net.HttpURLConnection) new java.net.URL(server + "/library/metadata/" + key).openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+            connection.setRequestProperty("Accept", "application/json");
+            if (connection.getResponseCode() != java.net.HttpURLConnection.HTTP_OK) {
+                android.util.Log.w("LTvLauncher", "Plex rating lookup got HTTP " + connection.getResponseCode() + " for " + key);
+                return null;
+            }
+            ByteArrayOutputStream body = new ByteArrayOutputStream();
+            try (java.io.InputStream in = connection.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    body.write(buffer, 0, bytesRead);
+                }
+            }
+            org.json.JSONArray metadata = new org.json.JSONObject(body.toString("UTF-8"))
+                .getJSONObject("MediaContainer").getJSONArray("Metadata");
+            return metadata.getJSONObject(0).optString("contentRating", "");
+        } catch (Exception e) {
+            android.util.Log.w("LTvLauncher", "Plex rating lookup failed for " + key + ": " + e);
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
     }
 
     // Amazon composites "NEW SERIES" / "TOP 10" style badges onto Prime Video artwork via
