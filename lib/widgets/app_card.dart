@@ -222,7 +222,17 @@ class _AppCardState extends State<AppCard> with TickerProviderStateMixin {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Flexible(
-                  child: AspectRatio(
+                  child: LayoutBuilder(
+                    builder: (context, outer) {
+                      // Pad the focused tile by exactly what the zoom adds, so its
+                      // neighbours slide apart instead of being overlapped.
+                      final zoom = _focusZoom(context, themes);
+                      final width = outer.maxHeight.isFinite ? outer.maxHeight * 16 / 9 : 0.0;
+                      return AnimatedPadding(
+                        duration: appSelectorTransitionAnimationEnabled ? const Duration(milliseconds: 200) : Duration.zero,
+                        curve: Curves.easeOutBack,
+                        padding: EdgeInsets.symmetric(horizontal: width * (zoom - 1) / 2),
+                        child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: RepaintBoundary(
                       child: LayoutBuilder(
@@ -231,7 +241,7 @@ class _AppCardState extends State<AppCard> with TickerProviderStateMixin {
                             duration: appSelectorTransitionAnimationEnabled ? const Duration(milliseconds: 200) : Duration.zero,
                             curve: Curves.easeOutBack,
                             transformAlignment: Alignment.center,
-                            transform: _scaleTransform(context, themes, constraints.maxWidth),
+                            transform: _scaleTransform(context, themes),
                             child: Material(
                           borderRadius: borderRadius,
                           clipBehavior: Clip.antiAlias,
@@ -439,6 +449,9 @@ class _AppCardState extends State<AppCard> with TickerProviderStateMixin {
                   ),
                 ),
               ),
+                      );
+                    },
+                  ),
             ),
             if (showAppNames)
                   Padding(
@@ -565,26 +578,24 @@ class _AppCardState extends State<AppCard> with TickerProviderStateMixin {
     return FocusManager.instance.highlightMode == FocusHighlightMode.traditional && Focus.of(context).hasFocus;
   }
 
-  Matrix4 _scaleTransform(BuildContext context, String theme, double maxWidth) {
-    double scale = 1.0;
-    if (!_moving && _shouldHighlight(context)) {
-      if (theme == 'premium') {
-        scale = 1.15;
-      } else if (theme == 'classic') {
-        scale = 1.0;
-      } else {
-        scale = 1.1;
-      }
-
-      if (maxWidth > 0) {
-        // Gap between cards is at least 16px.
-        // Limit horizontal expansion to 14px per side to prevent cropping with the next card.
-        double maxScale = 1.0 + (28.0 / maxWidth);
-        if (scale > maxScale) {
-          scale = maxScale;
-        }
-      }
+  // How much a focused tile grows. The padding around the tile makes room for it,
+  // so there is no need to cap it by the gap to the next card.
+  double _focusZoom(BuildContext context, String theme) {
+    if (_moving || !_shouldHighlight(context)) {
+      return 1.0;
     }
+    switch (theme) {
+      case 'classic':
+        return 1.0;
+      case 'premium':
+        return 1.25;
+      default:
+        return 1.2;
+    }
+  }
+
+  Matrix4 _scaleTransform(BuildContext context, String theme) {
+    final scale = _focusZoom(context, theme);
     return Matrix4.diagonal3Values(scale, scale, 1.0);
   }
 
