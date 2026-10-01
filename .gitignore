@@ -124,3 +124,6 @@ CLAUDE.original.md
 .windsurf/
 .cody/
 .copilot/
+
+# FVM - local SDK cache, pin itself lives in .fvmrc
+.fvm/
