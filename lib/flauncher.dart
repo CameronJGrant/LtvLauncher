@@ -20,6 +20,7 @@
 import 'package:flauncher/actions.dart';
 import 'package:flauncher/custom_traversal_policy.dart';
 import 'package:flauncher/providers/apps_service.dart';
+import 'package:flauncher/widgets/preview_backdrop.dart';
 import 'package:flauncher/providers/launcher_state.dart';
 import 'package:flauncher/providers/wallpaper_service.dart';
 import 'package:flauncher/widgets/apps_grid.dart';
@@ -207,6 +208,7 @@ class _FLauncherState extends State<FLauncher> {
       fit: StackFit.expand,
       children: [
         background,
+        const PreviewBackdrop(),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

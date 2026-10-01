@@ -21,6 +21,7 @@ import 'dart:async';
 import 'package:flauncher/actions.dart';
 import 'package:flauncher/app_image_type.dart';
 import 'package:flauncher/providers/apps_service.dart';
+import 'package:flauncher/providers/focused_app_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/application_info_panel.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
@@ -297,6 +298,9 @@ class _AppCardState extends State<AppCard> with TickerProviderStateMixin {
                                   onTap: () => _onPressed(context, LogicalKeyboardKey.enter),
                                   onLongPress: () => _onLongPress(context, LogicalKeyboardKey.enter),
                                   onFocusChange: (focused) {
+                                    if (focused) {
+                                      context.read<FocusedAppService>().setFocused(widget.application.packageName);
+                                    }
                                     Scrollable.ensureVisible(
                                       context,
                                       // This specific alignment value is not only

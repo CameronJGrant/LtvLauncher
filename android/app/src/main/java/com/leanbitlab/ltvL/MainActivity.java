@@ -177,6 +177,10 @@ public class MainActivity extends FlutterActivity {
                     }
                 }
                 case "getWatchNextPrograms" -> result.success(getWatchNextPrograms());
+                case "getPreviewPrograms" -> sIoExecutor.execute(() -> {
+                    List<Map<String, Object>> programs = getPreviewPrograms();
+                    runOnUiThread(() -> result.success(programs));
+                });
                 case "deleteWatchNextProgram" -> {
                     Number id = call.argument("id");
                     if (id != null) {
@@ -1267,6 +1271,51 @@ public class MainActivity extends FlutterActivity {
         return val != null ? val : "";
     }
 
+    private List<Map<String, Object>> getPreviewPrograms() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return Collections.emptyList();
+        }
+        return getPreviewProgramsApi26();
+    }
+
+    // Reading other apps' preview programs requires READ_TV_LISTINGS (the same permission
+    // Continue Watching requests); without it the provider only returns our own rows.
+    @RequiresApi(Build.VERSION_CODES.O)
+    private List<Map<String, Object>> getPreviewProgramsApi26() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        String[] projection = {
+            TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME,
+            TvContract.PreviewPrograms.COLUMN_TITLE,
+            TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI,
+            TvContract.PreviewPrograms.COLUMN_POSTER_ART_ASPECT_RATIO,
+            TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI,
+            TvContract.PreviewPrograms.COLUMN_THUMBNAIL_ASPECT_RATIO,
+            TvContract.PreviewPrograms.COLUMN_BROWSABLE,
+        };
+        try (android.database.Cursor cursor = getContentResolver().query(
+                TvContract.PreviewPrograms.CONTENT_URI, projection, null, null, null)) {
+            if (cursor == null) {
+                return list;
+            }
+            while (cursor.moveToNext()) {
+                if (cursor.getInt(6) == 0) {
+                    continue;
+                }
+                Map<String, Object> program = new HashMap<>();
+                program.put("packageName", cursor.getString(0));
+                program.put("title", cursor.getString(1));
+                program.put("posterArtUri", cursor.getString(2));
+                program.put("posterArtAspectRatio", cursor.getInt(3));
+                program.put("thumbnailUri", cursor.getString(4));
+                program.put("thumbnailAspectRatio", cursor.getInt(5));
+                list.add(program);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
     private List<Map<String, Object>> getWatchNextPrograms() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return Collections.emptyList();
@@ -1398,14 +1447,47 @@ public class MainActivity extends FlutterActivity {
         }
     }
 
+    // Streaming apps (Netflix, Prime Video) publish their artwork as https URLs.
+    private static final int REMOTE_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+
+    private byte[] fetchRemoteImage(String url) {
+        java.net.HttpURLConnection connection = null;
+        try {
+            connection = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+            connection.setInstanceFollowRedirects(true);
+            if (connection.getResponseCode() != java.net.HttpURLConnection.HTTP_OK) {
+                return null;
+            }
+            try (java.io.InputStream inputStream = connection.getInputStream()) {
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                    if (outputStream.size() > REMOTE_IMAGE_MAX_BYTES) {
+                        return null;
+                    }
+                }
+                return outputStream.toByteArray();
+            }
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
     private byte[] getWatchNextPoster(String posterArtUri) {
         if (posterArtUri == null || posterArtUri.isEmpty()) {
             return null;
         }
         try {
             if (posterArtUri.startsWith("http://") || posterArtUri.startsWith("https://")) {
-                // Fully offline launcher: remote network fetching disabled
-                return null;
+                return fetchRemoteImage(posterArtUri);
             } else if (posterArtUri.startsWith("file://")) {
                 Uri fileUri = Uri.parse(posterArtUri);
                 java.io.File file = new java.io.File(fileUri.getPath());

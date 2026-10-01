@@ -230,6 +230,15 @@ class FLauncherChannel {
     }
   }
 
+  Future<List<Map<dynamic, dynamic>>> getPreviewPrograms() async {
+    try {
+      final List<dynamic>? list = await _methodChannel.invokeMethod("getPreviewPrograms");
+      return list?.cast<Map<dynamic, dynamic>>() ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<Uint8List?> getWatchNextPoster(String posterArtUri) async {
     try {
       final Uint8List? bytes = await _methodChannel.invokeMethod("getWatchNextPoster", {"posterArtUri": posterArtUri});
