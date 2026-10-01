@@ -1600,45 +1600,103 @@ public class MainActivity extends FlutterActivity {
         "R", "NC-17", "X", "TV-MA", "18", "18A", "R18"));
     private static final java.util.Set<String> UNRATED = new java.util.HashSet<>(java.util.Arrays.asList(
         "", "NR", "NOT RATED", "UNRATED"));
-    private static final String RATING_LOOKUP_FAILED = "?";
+    // Plenty of unrated titles are foreign films that skipped the MPA (Train to Busan, I Saw
+    // the Devil), so unrated only counts as harmless for kids' titles and pre-MPA classics.
+    private static final java.util.Set<String> KIDS_GENRES = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Animation", "Family", "Children", "Kids"));
+    private static final int FIRST_MPA_RATED_YEAR = 1968;
 
-    private final java.util.Map<String, String> plexRatings = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final class PlexRating {
+        // Normalized, e.g. "R" or "TV-MA", "" when unrated.
+        final String rating;
+        final boolean kidsOrClassic;
 
-    // A Plex item's rating, normalized ("R", "TV-MA", "" when unrated). Null for items from
-    // other apps or with no Plex server configured; RATING_LOOKUP_FAILED when the server
-    // couldn't be asked, so a hiccup never lets artwork through.
-    private String plexRating(String packageName, String intentUri) {
+        PlexRating(String rating, boolean kidsOrClassic) {
+            this.rating = rating;
+            this.kidsOrClassic = kidsOrClassic;
+        }
+
+        boolean isAdult() {
+            return ADULT_RATINGS.contains(rating);
+        }
+
+        boolean isUnrated() {
+            return UNRATED.contains(rating);
+        }
+    }
+
+    private static final PlexRating RATING_LOOKUP_FAILED = new PlexRating("?", false);
+
+    private final java.util.Map<String, PlexRating> plexRatings = new java.util.concurrent.ConcurrentHashMap<>();
+
+    // Null for items from other apps or with no Plex server configured; RATING_LOOKUP_FAILED
+    // when the server couldn't be asked, so a hiccup never lets artwork through.
+    private PlexRating plexRating(String packageName, String intentUri) {
         String server = plexServer();
         String key = plexItemKey(packageName, intentUri);
         if (server.isEmpty() || key == null) {
             return null;
         }
-        String rating = plexRatings.get(key);
+        PlexRating rating = plexRatings.get(key);
         if (rating == null) {
-            rating = fetchPlexContentRating(server, key);
+            rating = fetchPlexRating(server, key);
             if (rating == null) {
                 return RATING_LOOKUP_FAILED;
             }
             plexRatings.put(key, rating);
         }
-        String normalized = rating.trim().toUpperCase(java.util.Locale.ROOT);
-        // Regional ratings come through as "gb/18" or "ca/14A".
-        return normalized.substring(normalized.lastIndexOf('/') + 1);
+        return rating;
     }
 
     private boolean isPlexAdult(String packageName, String intentUri) {
-        String rating = plexRating(packageName, intentUri);
-        return rating != null && (rating.equals(RATING_LOOKUP_FAILED) || ADULT_RATINGS.contains(rating));
+        PlexRating rating = plexRating(packageName, intentUri);
+        return rating != null && (rating == RATING_LOOKUP_FAILED || rating.isAdult()
+            || (rating.isUnrated() && !rating.kidsOrClassic));
     }
 
     private boolean isPlexAdultOrUnrated(String packageName, String intentUri) {
-        String rating = plexRating(packageName, intentUri);
-        return rating != null
-            && (rating.equals(RATING_LOOKUP_FAILED) || ADULT_RATINGS.contains(rating) || UNRATED.contains(rating));
+        PlexRating rating = plexRating(packageName, intentUri);
+        return rating != null && (rating == RATING_LOOKUP_FAILED || rating.isAdult() || rating.isUnrated());
     }
 
-    // The item's content rating ("" when it has none), or null if the lookup failed.
-    private String fetchPlexContentRating(String server, String key) {
+    // Null if the lookup failed.
+    private PlexRating fetchPlexRating(String server, String key) {
+        org.json.JSONObject item = fetchPlexMetadata(server, key);
+        if (item == null) {
+            return null;
+        }
+        String rating = item.optString("contentRating", "").trim().toUpperCase(java.util.Locale.ROOT);
+        // Regional ratings come through as "gb/18" or "ca/14A".
+        rating = rating.substring(rating.lastIndexOf('/') + 1);
+        if (!UNRATED.contains(rating)) {
+            return new PlexRating(rating, false);
+        }
+        // Episodes keep their genres on the show.
+        String showKey = item.optString("grandparentRatingKey", "");
+        org.json.JSONObject title = showKey.isEmpty() ? item : fetchPlexMetadata(server, showKey);
+        if (title == null) {
+            return null;
+        }
+        return new PlexRating(rating, isKidsOrClassic(title));
+    }
+
+    private static boolean isKidsOrClassic(org.json.JSONObject title) {
+        int year = title.optInt("year", 0);
+        if (year > 0 && year < FIRST_MPA_RATED_YEAR) {
+            return true;
+        }
+        org.json.JSONArray genres = title.optJSONArray("Genre");
+        for (int i = 0; genres != null && i < genres.length(); i++) {
+            org.json.JSONObject genre = genres.optJSONObject(i);
+            if (genre != null && KIDS_GENRES.contains(genre.optString("tag"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The item's metadata from the Plex server, or null if the lookup failed.
+    private org.json.JSONObject fetchPlexMetadata(String server, String key) {
         java.net.HttpURLConnection connection = null;
         try {
             connection = (java.net.HttpURLConnection) new java.net.URL(server + "/library/metadata/" + key).openConnection();
@@ -1646,7 +1704,7 @@ public class MainActivity extends FlutterActivity {
             connection.setReadTimeout(10000);
             connection.setRequestProperty("Accept", "application/json");
             if (connection.getResponseCode() != java.net.HttpURLConnection.HTTP_OK) {
-                android.util.Log.w("LTvLauncher", "Plex rating lookup got HTTP " + connection.getResponseCode() + " for " + key);
+                android.util.Log.w("LTvLauncher", "Plex metadata lookup got HTTP " + connection.getResponseCode() + " for " + key);
                 return null;
             }
             ByteArrayOutputStream body = new ByteArrayOutputStream();
@@ -1659,9 +1717,9 @@ public class MainActivity extends FlutterActivity {
             }
             org.json.JSONArray metadata = new org.json.JSONObject(body.toString("UTF-8"))
                 .getJSONObject("MediaContainer").getJSONArray("Metadata");
-            return metadata.getJSONObject(0).optString("contentRating", "");
+            return metadata.getJSONObject(0);
         } catch (Exception e) {
-            android.util.Log.w("LTvLauncher", "Plex rating lookup failed for " + key + ": " + e);
+            android.util.Log.w("LTvLauncher", "Plex metadata lookup failed for " + key + ": " + e);
             return null;
         } finally {
             if (connection != null) {
